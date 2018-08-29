@@ -1,0 +1,117 @@
+version: 2
+
+
+jobs:
+  checkout_code:
+    docker:
+    - image: circleci/openjdk:8-jdk-browsers
+
+    working_directory: ~/circleci-mangold-app-java
+
+    steps:
+    - checkout
+    - persist_to_workspace:
+        root: ~/circleci-mangold-app-java
+        paths:
+        - .
+
+  build_java:
+    working_directory: ~/circleci-mangold-app-java
+
+    environment:
+    - MAVEN_OPTS: -Xmx256m
+
+    docker:
+    - image: circleci/openjdk:8-jdk-browsers
+
+    steps:
+    - attach_workspace:
+        at: .
+    - restore_cache:
+        key: swarm-microservice-boilerplate-maven-repo-{{ checksum "pom.xml" }}
+
+    - run: mvn clean install
+
+    - run:
+        name: Save test results
+        command: |
+          mkdir -p ~/junit/
+          find . -type f -regex ".*/target/surefire-reports/.*xml" -exec cp {} ~/junit/ \;
+        when: always
+    - store_test_results:
+        path: ~/junit
+    - store_artifacts:
+        path: ~/junit
+    - store_artifacts:
+        path: target/swarm-microservice-boilerplate-thorntail.jar
+        destination: swarm-microservice-boilerplate-thorntail.jar
+    - store_artifacts:
+        path: target/swarm-microservice-boilerplate.war
+        destination: swarm-microservice-boilerplate.war
+
+    - save_cache:
+        key: swarm-microservice-boilerplate-maven-repo-{{ checksum "pom.xml" }}
+        paths:
+        - ~/.m2
+
+    - persist_to_workspace:
+        root: ~/circleci-mangold-app-java
+        paths:
+        - .
+
+  deploy_google:
+    working_directory: ~/circleci-mangold-app-java
+
+    docker:
+    - image: google/cloud-sdk
+
+    environment:
+      PROJECT_NAME: {REPLACE WITH GOOGLE PROJECT NAME}
+      PROJECT_ID: {REPLACE WITH GOOGLE PROJECT ID}
+      CLUSTER_NAME: {REPLACE WITH GKE CLUSTER NAME}
+      CLOUDSDK_COMPUTE_ZONE: {REPLACE WITH GOOGLE CLOUD COMPUTE ZONE}
+
+    steps:
+    - setup_remote_docker
+    - attach_workspace:
+        at: .
+
+    - run: echo 'export LOWER_CIRCLE_BRANCH="'$(echo $CIRCLE_BRANCH | tr '[:upper:]' '[:lower:]')'"' >> $BASH_ENV
+
+    - run:
+        name: Store Service Account
+        command: echo $GCLOUD_SERVICE_KEY | base64 --decode -i > ${HOME}/gcloud-service-key.json
+
+    - run:
+        name: GCloud Settings And Auth
+        command: |
+          gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
+          gcloud config set project $PROJECT_ID
+          gcloud config set compute/zone ${CLOUDSDK_COMPUTE_ZONE}
+          gcloud --quiet container clusters get-credentials ${CLUSTER_NAME} --zone ${CLOUDSDK_COMPUTE_ZONE} --project ${PROJECT_ID}
+          gcloud auth configure-docker --quiet
+
+    - run: pwd
+    - run: ls -la
+
+    - run:
+        name: Deploy on Google Cloud
+        command: |
+          sh ./deploy_google.sh
+
+
+workflows:
+  version: 2
+  build-easy-app:
+    jobs:
+    - checkout_code
+    - build_java:
+        requires:
+        - checkout_code
+    - deploy_google:
+        requires:
+        - build_java
+        filters:
+          branches:
+            only:
+            - master

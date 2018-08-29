@@ -1,0 +1,21 @@
+version: '3.4'
+
+services:
+  mysql:
+    image: mysql:5.7.21
+    container_name: docker_microservice_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+  swarm-microservice-boilerplate:
+    build: ./
+    container_name: swarm-microservice-boilerplate
+    volumes:
+      - ./target:/swarm-microservice-boilerplate
+    ports:
+      - 8080:8080
+    environment:
+      - "SWARM_DS_USERNAME=root"
+      - "SWARM_DS_PASSWORD=root"
+      - "SWARM_DS_CONNECTION_URL=jdbc:mysql://docker_microservice_mysql:3306/service"

@@ -1,0 +1,18 @@
+swarm:
+  http:
+    port: 8080
+  datasources:
+    jdbc-drivers:
+      com.mysql:
+        driver-class-name: com.mysql.jdbc.Driver
+        xa-datasource-class-name: com.mysql.jdbc.jdbc2.optional.MysqlXADataSource
+        driver-module-name: com.mysql
+    data-sources:
+      mangoldDS:
+        driver-name: com.mysql
+        connection-url: jdbc:mysql://host:port/database
+        user-name: user
+        password: password
+        initial-pool-size: 8
+        max-pool-size: 32
+        min-pool-size: 8
